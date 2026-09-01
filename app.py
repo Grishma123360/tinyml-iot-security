@@ -50,7 +50,7 @@ channel_names = ["PM10", "eTVOC", "NO", "NO2", "CO2"]
 classes = ["Normal Operation", "🔴 FREEZE ATTACK DETECTED", "⚠️ REPLAY ATTACK DETECTED"]
 
 # 3. Main Dashboard UI Layout Layout Split
-col1, col2 = st.columns([2, 1])
+col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("📊 Live Sensor Telemetry Stream")
@@ -61,12 +61,10 @@ with col2:
     status_box = st.empty()
     metrics_box = st.empty()
     st.markdown("### 🔍 Model Feature Importance Weights")
-    # Dynamic display of your day 11 feature selection configurations
     st.info("**PM10 & CO2**: Key indicators for Freeze signatures.\n\n**eTVOC & NO2**: Prioritized for tracking Replay loops.")
 
 # 4. Simulation Stream Loop execution
 if run_simulation:
-    # Filter sample vectors based on user's scenario choice
     if scenario == "Nominal (Normal Data)":
         target_indices = np.where(y_raw == 0)[0]
     elif scenario == "Inject Freeze Attack":
@@ -74,32 +72,23 @@ if run_simulation:
     else:
         target_indices = np.where(y_raw == 2)[0]
         
-    # Pick a random window from that classification segment
     random_idx = np.random.choice(target_indices)
     sample_window = X_reshaped[random_idx]
     
-    # Animate the timeline stream step-by-step to look like a live system
     for step in range(10, 65):
-        # Create rolling window frame view
         current_frame = sample_window[:step]
         chart_df = pd.DataFrame(current_frame, columns=channel_names)
-        
-        # Update the live chart view
         chart_placeholder.line_chart(chart_df)
         
-        # Prepare the single window payload for immediate classification check
-        # We take a fixed 64-step view (padding early steps with zeros if needed)
         input_payload = np.zeros((1, 64, 5))
         input_payload[0, :step] = sample_window[:step]
         
-        # Run inference using your trained neural network weights
         start_time = time.time()
         preds_proba = model(input_payload, training=False).numpy()
         latency = (time.time() - start_time) * 1000
-        predicted_class = np.argmax(preds_proba[0])
+        predicted_class = np.argmax(preds_proba)
         confidence = preds_proba[0][predicted_class] * 100
         
-        # Update the status box and alerts in real-time
         if predicted_class == 0:
             status_box.success(f"STATUS: {classes[predicted_class]}")
         elif predicted_class == 1:
@@ -113,6 +102,6 @@ if run_simulation:
         * **Active Sensor Channels:** 5 Channels
         """)
         
-        time.sleep(0.08) # Simulates data transmission delay
+        time.sleep(0.08)
 else:
     status_box.info("System Standby. Click 'Start Live Stream Monitoring' in the sidebar to begin.")
