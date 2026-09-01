@@ -32,6 +32,10 @@ attack_mode = st.sidebar.selectbox(
 )
 
 api_provider = st.sidebar.radio("Select LLM Core Engine:", ["Google Gemini", "Anthropic Claude"])
+
+# FIX: Added a secure input text box directly into the sidebar interface layout
+user_api_key = st.sidebar.text_input("Enter your API Key:", type="password", help="Paste your secret key string here to bypass local environment path blocks.")
+
 trigger_analysis = st.sidebar.button("🔍 Generate Incident Intelligence Report")
 
 # 3. Prompt Layout
@@ -91,29 +95,28 @@ with col2:
 
 # 5. Live LLM Execution Callbacks
 if trigger_analysis:
-    report_box.warning("Contacting secure API endpoints... Generating narrative blocks...")
-    generated_prompt = compile_analyst_prompt(target_class, metrics_payload, features_payload)
+    # FIX: Priority goes to the manual input box field, then checks local paths
+    active_key = user_api_key if user_api_key else os.environ.get(f"{'GEMINI' if api_provider == 'Google Gemini' else 'ANTHROPIC'}_API_KEY")
     
-    try:
-        if api_provider == "Google Gemini":
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                report_box.error("Error: GEMINI_API_KEY is missing from your system environment variables.")
-            else:
-                client = genai.Client(api_key=api_key)
-                response = client.models.generate_content(model='gemini-2.5-flash', contents=generated_prompt)
+    if not active_key:
+        report_box.error(f"Error: Secret API Key missing. Please paste your key directly into the sidebar text field box above to run inference.")
+    else:
+        report_box.warning("Contacting secure API endpoints... Generating narrative blocks...")
+        generated_prompt = compile_analyst_prompt(target_class, metrics_payload, features_payload)
+        
+        try:
+            if api_provider == "Google Gemini":
+                client = genai.Client(api_key=active_key)
+                response = client.models.generate_content(model='gemini-3.6-flash', contents=generated_prompt)
+
                 report_box.markdown(response.text)
-        else:
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-            if not api_key:
-                report_box.error("Error: ANTHROPIC_API_KEY is missing from your system environment variables.")
             else:
-                client = anthropic.Anthropic(api_key=api_key)
+                client = anthropic.Anthropic(api_key=active_key)
                 response = client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=1000,
                     messages=[{"role": "user", "content": generated_prompt}]
                 )
                 report_box.markdown(response.content.text)
-    except Exception as e:
-        report_box.error(f"API Execution Failure: {str(e)}")
+        except Exception as e:
+            report_box.error(f"API Execution Failure: {str(e)}")
